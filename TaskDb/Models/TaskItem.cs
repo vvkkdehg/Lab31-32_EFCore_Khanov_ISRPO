@@ -5,6 +5,7 @@ public class TaskItem {
     public int Id { get; set; }
     public bool IsCompleted { get; set; } = false;
     public DateTime CreatedAt { get; set; } = DateTime.Now;
+    public DateTime? DueDate { get; set; }
     
     [Required]
     [MaxLength(200)]

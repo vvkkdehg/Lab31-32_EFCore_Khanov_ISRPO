@@ -41,16 +41,17 @@ public class TasksController : ControllerBase {
     }
 
     [HttpPost]
-    public async Task<ActionResult<TaskItem>> Create([FromBody] CreateTaskDto dtos) {
-        if (string.IsNullOrWhiteSpace(dtos.Title))
+    public async Task<ActionResult<TaskItem>> Create([FromBody] CreateTaskDto dto) {
+        if (string.IsNullOrWhiteSpace(dto.Title))
             return BadRequest(new { Message = "Поле Title обязательно для заполнения" });
 
         var task = new TaskItem {
-            Title = dtos.Title.Trim(),
-            Description = dtos.Description?.Trim() ?? string.Empty,
-            Priority = dtos.Priority,
+            Title = dto.Title.Trim(),
+            Description = dto.Description?.Trim() ?? string.Empty,
+            Priority = dto.Priority,
             IsCompleted = false,
-            CreatedAt = DateTime.Now
+            CreatedAt = DateTime.UtcNow,
+            DueDate = dto.DueDate
         };
 
         _db.Tasks.Add(task);
@@ -59,17 +60,18 @@ public class TasksController : ControllerBase {
     }
 
     [HttpPut("{id}")]
-    public async Task<ActionResult<TaskItem>> Update(int id, [FromBody] UpdateTaskDto dt) {
+    public async Task<ActionResult<TaskItem>> Update(int id, [FromBody] UpdateTaskDto dto) {
         var task = await _db.Tasks.FindAsync(id);
         if (task is null)
             return NotFound(new { Message = $"Задача с id={id} не найдена" });
-        if (string.IsNullOrWhiteSpace(dt.Title))
+        if (string.IsNullOrWhiteSpace(dto.Title))
             return BadRequest(new { Message = "Поле Title не может быть пустым" });
         
-        task.Title = dt.Title;
-        task.Description = dt.Description?.Trim() ?? string.Empty;
-        task.IsCompleted = dt.IsCompleted;
-        task.Priority = dt.Priority;
+        task.Title = dto.Title.Trim();
+        task.Description = dto.Description?.Trim() ?? string.Empty;
+        task.IsCompleted = dto.IsCompleted;
+        task.Priority = dto.Priority;
+        task.DueDate = dto.DueDate;
         await _db.SaveChangesAsync();
         return Ok(task);
     }
@@ -158,5 +160,18 @@ public class TasksController : ControllerBase {
             HasNext = page < totalPages,
             Items = tasks
         });
+    }
+
+    [HttpGet("overdue")]
+    public async Task<ActionResult<IEnumerable<TaskItem>>> GetOverdue() {
+        var now = DateTime.UtcNow;
+        var overdue = await _db.Tasks
+            .Where(t => t.DueDate != null
+                && t.DueDate < now
+                && !t.IsCompleted)
+            .OrderBy(t => t.DueDate)
+            .ToListAsync();
+
+        return Ok(overdue);
     }
 }
