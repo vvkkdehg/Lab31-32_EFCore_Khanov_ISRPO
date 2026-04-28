@@ -96,6 +96,16 @@ public class TasksController : ControllerBase {
         return NoContent();
     }
 
+    [HttpPatch("complete-all")]
+    public async Task<ActionResult> CompleteAll() {
+        var tasks = await _db.Tasks.Where(t => !t.IsCompleted).ToListAsync();
+        foreach (var task in tasks) {
+            task.IsCompleted = true;
+        }
+        await _db.SaveChangesAsync();
+        return Ok(new { Updated = tasks.Count });
+    }
+
     [HttpGet("search")]
     public async Task<ActionResult<IEnumerable<TaskItem>>> Search(
         [FromQuery] string? query = null,
@@ -173,5 +183,13 @@ public class TasksController : ControllerBase {
             .ToListAsync();
 
         return Ok(overdue);
+    }
+
+    [HttpDelete("completed")]
+    public async Task<ActionResult> DeleteCompleted() {
+        var tasks = await _db.Tasks.Where(t => t.IsCompleted).ToListAsync();
+        _db.Tasks.RemoveRange(tasks);
+        await _db.SaveChangesAsync();
+        return Ok(new { Deleted = tasks.Count });
     }
 }
