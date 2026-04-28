@@ -93,4 +93,70 @@ public class TasksController : ControllerBase {
         await _db.SaveChangesAsync();
         return NoContent();
     }
+
+    [HttpGet("search")]
+    public async Task<ActionResult<IEnumerable<TaskItem>>> Search(
+        [FromQuery] string? query = null,
+        [FromQuery] string? priority = null,
+        [FromQuery] bool? completed = null) {
+        var q = _db.Tasks.AsQueryable();
+
+        if (!string.IsNullOrWhiteSpace(query))
+            q = q.Where(t => t.Title.Contains(query) || t.Description.Contains(query));
+        if (!string.IsNullOrWhiteSpace(priority))
+            q = q.Where(t => t.Priority == priority);
+        if (completed.HasValue)
+            q = q.Where(t => t.IsCompleted == completed.Value);
+        var results = await q
+            .OrderByDescending(t => t.CreatedAt)
+            .ToListAsync();
+        return Ok(results);
+    }
+
+    [HttpGet("stats")]
+    public async Task<ActionResult> GetStats() {
+        var total = await _db.Tasks.CountAsync();
+        var completed = await _db.Tasks.CountAsync(t => t.IsCompleted);
+        var pending = total - completed;
+        var byPriority = await _db.Tasks
+            .GroupBy(t => t.Priority)
+            .Select(g => new { Priority = g.Key, Count = g.Count() })
+            .ToListAsync();
+        var recentDate = DateTime.UtcNow.AddDays(-7);
+        var recentCount = await _db.Tasks
+            .CountAsync(t => t.CreatedAt >= recentDate);
+        return Ok(new {
+            Total = total,
+            Completed = completed,
+            Pending = pending,
+            CompletionPct = total > 0 ? Math.Round((double)completed / total * 100, 1) : 0,
+            ByPriority = byPriority,
+            CreatedLastWeek = recentCount
+        });
+    }
+
+    [HttpGet("paged")]
+    public async Task<ActionResult> GetPaged(
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 5) {
+        if (page < 1) page = 1;
+        if (pageSize < 1) pageSize = 5;
+        if (pageSize > 50) pageSize = 50;
+        var totalCount = await _db.Tasks.CountAsync();
+        var totalPages = (int)Math.Ceiling((double)totalCount / pageSize);
+        var tasks = await _db.Tasks
+            .OrderByDescending(t => t.CreatedAt)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .ToListAsync();
+        return Ok(new {
+            Page = page,
+            PageSize = pageSize,
+            TotalCount = totalCount,
+            TotalPages = totalPages,
+            HasPrev = page > 1,
+            HasNext = page < totalPages,
+            Items = tasks
+        });
+    }
 }
